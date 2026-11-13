@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
+import PhotoTryOn from './PhotoTryOn'
 import './style.css'
 
 const bottoms = [
@@ -10,7 +11,7 @@ const bottoms = [
 
 type Bottom = typeof bottoms[number]
 type BottomId = Bottom['id']
-type View = 'select' | 'compare' | 'saved'
+type View = 'select' | 'compare' | 'saved' | 'photo'
 const storageKey = 'nexus-clothes:saved:v1'
 
 function readSaved(): BottomId[] {
@@ -78,12 +79,14 @@ function App() {
           <button className="brand" onClick={() => navigate('select')}><span aria-hidden="true" className="brand-icon">◇</span> 通販服試着</button>
           <nav aria-label="画面">
             <button aria-current={view === 'select' ? 'page' : undefined} onClick={() => navigate('select')}>組み合わせ</button>
+            <button aria-current={view === 'photo' ? 'page' : undefined} onClick={() => navigate('photo')}>写真で試着</button>
             {results.length > 0 && <button aria-current={view === 'compare' ? 'page' : undefined} onClick={() => navigate('compare')}>比較結果</button>}
             <button aria-current={view === 'saved' ? 'page' : undefined} onClick={() => navigate('saved')}>保存したコーデ <span className="nav-count">{saved.length}</span></button>
           </nav>
         </div>
       </header>
       <main>
+        <PhotoTryOn active={view === 'photo'} />
         {view === 'select' && <>
           <section className="intro">
             <p className="eyebrow">サンプルで体験</p>
