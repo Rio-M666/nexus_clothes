@@ -12,6 +12,7 @@ type Bottom = typeof bottoms[number]
 type BottomId = Bottom['id']
 type View = 'select' | 'compare' | 'saved'
 const storageKey = 'nexus-clothes:saved:v1'
+const imageBase = `${import.meta.env.BASE_URL}images/`
 
 function readSaved(): BottomId[] {
   try {
@@ -58,7 +59,7 @@ function App() {
           setEnlarged(bottom)
           dialog.current?.showModal()
         }}>
-          <img src={`/images/look-${bottom.id}.jpg`} alt={name} />
+          <img src={`${imageBase}look-${bottom.id}.jpg`} alt={name} />
           <span className="expand" aria-hidden="true">↗</span>
         </button>
         <div className="look-caption">
@@ -93,7 +94,7 @@ function App() {
           <div className="selection">
             <section className="product">
               <h2>試したいトップス</h2>
-              <img src="/images/shirt.jpg" alt="白い長袖オックスフォードシャツの正面" />
+              <img src={`${imageBase}shirt.jpg`} alt="白い長袖オックスフォードシャツの正面" />
               <p>白シャツ</p>
             </section>
             <fieldset className="bottoms">
@@ -106,7 +107,7 @@ function App() {
                       const checked = event.currentTarget.checked
                       setSelected((current) => checked ? [...current, id] : current.filter((item) => item !== id))
                     }} />
-                    <img src={`/images/bottom-${id}.jpg`} alt="" />
+                    <img src={`${imageBase}bottom-${id}.jpg`} alt="" />
                     <span className="option-name">{name}</span>
                     <span className="tick" aria-hidden="true">✓</span>
                   </label>
@@ -145,7 +146,7 @@ function App() {
         if (event.target === event.currentTarget) event.currentTarget.close()
       }}>
         {enlarged && <figure>
-          <img src={`/images/look-${enlarged.id}.jpg`} alt={`白シャツ × ${enlarged.name}`} />
+          <img src={`${imageBase}look-${enlarged.id}.jpg`} alt={`白シャツ × ${enlarged.name}`} />
           <figcaption>白シャツ × {enlarged.name}</figcaption>
           <button className="close" aria-label="拡大画像を閉じる" onClick={() => dialog.current?.close()}>×</button>
         </figure>}
