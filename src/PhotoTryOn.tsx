@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import TryOnComparison from './TryOnComparison'
 
 type Category = 'upper_body' | 'lower_body' | 'full_body'
 
@@ -9,8 +10,24 @@ class RequestError extends Error {
 async function apiResponse(response: Response) {
   const data = await response.json().catch(() => null)
   if (!response.ok) throw new RequestError(data?.error || '画像生成に接続できませんでした。時間を置いてお試しください。', response.status)
-  if (!data || typeof data !== 'object') throw new Error('画像生成を利用できません。サンプルでお試しください。')
+  if (!data || typeof data !== 'object') throw new Error('画像生成サービスに接続できませんでした。')
   return data
+}
+
+function usePhotoUrl(file: File | null) {
+  const [url, setUrl] = useState('')
+
+  useEffect(() => {
+    if (!file) {
+      setUrl('')
+      return
+    }
+    const next = URL.createObjectURL(file)
+    setUrl(next)
+    return () => URL.revokeObjectURL(next)
+  }, [file])
+
+  return url
 }
 
 function ImagePicker({ label, file, disabled, onChange }: {
@@ -19,20 +36,15 @@ function ImagePicker({ label, file, disabled, onChange }: {
   disabled: boolean
   onChange: (file: File | null) => void
 }) {
-  const [preview, setPreview] = useState('')
+  const preview = usePhotoUrl(file)
   const [error, setError] = useState('')
   const selection = useRef(0)
 
-  useEffect(() => {
-    if (!file) { setPreview(''); return }
-    const url = URL.createObjectURL(file)
-    setPreview(url)
-    return () => URL.revokeObjectURL(url)
-  }, [file])
-
   return <label className="image-picker">
     <span>{label}</span>
-    {preview && <img src={preview} alt={`${label}のプレビュー`} />}
+    <span className="image-preview">
+      {preview ? <img src={preview} alt={`${label}のプレビュー`} /> : <span>JPEGまたはPNG</span>}
+    </span>
     <input type="file" accept="image/jpeg,image/png" disabled={disabled} onChange={async (event) => {
       const input = event.currentTarget
       const next = input.files?.[0]
@@ -58,12 +70,14 @@ function ImagePicker({ label, file, disabled, onChange }: {
         setError(cause instanceof Error && !(cause instanceof DOMException) ? cause.message : '写真を読み込めませんでした。別の写真をお試しください。')
       }
     }} />
+    {file && <span className="photo-hint">ファイルを選び直すと写真を差し替えられます。</span>}
     {error && <span className="form-error" role="alert">{error}</span>}
   </label>
 }
 
-export default function PhotoTryOn({ active }: { active: boolean }) {
+export default function PhotoTryOn() {
   const [configured, setConfigured] = useState<boolean | null>(null)
+  const [configError, setConfigError] = useState(false)
   const [person, setPerson] = useState<File | null>(null)
   const [garment, setGarment] = useState<File | null>(null)
   const [category, setCategory] = useState<Category>('upper_body')
@@ -71,10 +85,10 @@ export default function PhotoTryOn({ active }: { active: boolean }) {
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState('')
   const [error, setError] = useState('')
-  const [result, setResult] = useState('')
+  const [result, setResult] = useState<{ url: string; original: File } | null>(null)
+  const originalUrl = usePhotoUrl(result?.original ?? null)
   const [pendingTask, setPendingTask] = useState<string | null>(null)
   const controller = useRef<AbortController | null>(null)
-  const heading = useRef<HTMLHeadingElement>(null)
   const resultHeading = useRef<HTMLHeadingElement>(null)
 
   useEffect(() => {
@@ -82,26 +96,26 @@ export default function PhotoTryOn({ active }: { active: boolean }) {
     fetch('/api/try-on/config', { signal: abort.signal })
       .then(apiResponse)
       .then((data) => setConfigured(data.configured === true))
-      .catch(() => { if (!abort.signal.aborted) setConfigured(false) })
+      .catch(() => { if (!abort.signal.aborted) setConfigError(true) })
     return () => { abort.abort(); controller.current?.abort() }
   }, [])
 
-  useEffect(() => { if (active) heading.current?.focus({ preventScroll: true }) }, [active])
+  useEffect(() => { if (result) resultHeading.current?.focus() }, [result])
 
   async function generate() {
-    if ((!pendingTask && (!person || !garment || !consent)) || !configured || controller.current) return
+    if (!person || (!pendingTask && (!garment || !consent)) || !configured || controller.current) return
     const abort = new AbortController()
     controller.current = abort
     const timeout = window.setTimeout(() => abort.abort(), 5 * 60_000)
     setBusy(true)
     setError('')
-    setResult('')
+    setResult(null)
     setProgress(pendingTask ? '結果を確認しています…' : '写真を送信しています…')
     let taskId = pendingTask
     try {
       if (!taskId) {
         const form = new FormData()
-        form.set('person', person!)
+        form.set('person', person)
         form.set('garment', garment!)
         form.set('category', category)
         const task = await fetch('/api/try-on', { method: 'POST', body: form, signal: abort.signal }).then(apiResponse)
@@ -128,9 +142,8 @@ export default function PhotoTryOn({ active }: { active: boolean }) {
         if (status.status === 'success') {
           const imageUrl = new URL(status.imageUrl)
           if (imageUrl.protocol !== 'https:') throw new Error('画像を取得できませんでした。')
-          setResult(imageUrl.href)
+          setResult({ url: imageUrl.href, original: person })
           setPendingTask(null)
-          requestAnimationFrame(() => { if (active) resultHeading.current?.focus() })
           return
         }
       }
@@ -149,20 +162,19 @@ export default function PhotoTryOn({ active }: { active: boolean }) {
     }
   }
 
-  return <section hidden={!active}>
+  return <section>
     <div className="intro">
-      <p className="eyebrow">あなたの写真で試着</p>
-      <h1 ref={heading} tabIndex={-1}>気になる服を、着てみよう。</h1>
       <p>正面を向いて1人で立った写真と、試したい服の写真を選びます。</p>
     </div>
-    {configured === false && <p className="api-notice" role="status">現在、写真での画像生成は利用できません。「組み合わせ」からサンプルを体験できます。</p>}
+    {configured === false && <p className="api-notice" role="status">YouCamのAPIキーが未設定です。プロジェクトの <code>.env.local</code> に <code>YOUCAM_API_KEY</code> を設定し、<code>npm run dev</code> を再起動してください。</p>}
+    {configError && <p className="api-notice" role="alert">画像生成サービスに接続できません。Macで <code>npm run dev</code> を起動し、ターミナルに表示されたURLを開いてください。</p>}
     <form className="tryon-form" onSubmit={(event) => { event.preventDefault(); void generate() }}>
       <fieldset disabled={busy || Boolean(pendingTask)}>
         <legend>写真を選ぶ</legend>
         <p className="hint">JPEG・PNG／各10MB未満／512×384px以上・長辺4096px以下</p>
         <div className="upload-grid">
-          <ImagePicker label="あなたの写真" file={person} disabled={busy} onChange={setPerson} />
-          <ImagePicker label="試したい服の写真" file={garment} disabled={busy} onChange={setGarment} />
+          <ImagePicker label="あなたの写真" file={person} disabled={busy} onChange={(file) => { setPerson(file); setConsent(false) }} />
+          <ImagePicker label="試したい服" file={garment} disabled={busy} onChange={(file) => { setGarment(file); setConsent(false) }} />
         </div>
         <label className="category-picker">服の種類
           <select value={category} onChange={(event) => setCategory(event.currentTarget.value as Category)}>
@@ -183,8 +195,12 @@ export default function PhotoTryOn({ active }: { active: boolean }) {
     </form>
     {result && <section className="generated-result">
       <h2 ref={resultHeading} tabIndex={-1}>試着画像ができました</h2>
-      <img src={result} alt="選択した服を着たAI生成の試着イメージ" referrerPolicy="no-referrer" onError={() => setError('生成画像を表示できません。画像の有効期限が切れている可能性があります。')} />
-      <a className="secondary" href={result} target="_blank" rel="noopener noreferrer">画像を開いて保存 ↗</a>
+      <TryOnComparison
+        originalUrl={originalUrl}
+        resultUrl={result.url}
+        onResultError={() => setError('生成画像を表示できません。画像の有効期限が切れている可能性があります。')}
+      />
+      <a className="secondary" href={result.url} target="_blank" rel="noopener noreferrer">画像を開いて保存 ↗</a>
       <p className="photo-hint">画像のURLには有効期限があります。気に入った画像は保存してください。着用感やサイズの正確さを保証するものではありません。</p>
     </section>}
   </section>
