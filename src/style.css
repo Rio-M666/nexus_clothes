@@ -362,3 +362,107 @@ main:focus { outline: none; }
   .sample-workbench.has-result .image-preview { height: clamp(155px, 16vw, 230px); }
   .sample-workbench.has-result .comparison .zoom-button img { height: clamp(265px, 29vw, 410px); }
 }
+
+.result-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.result-actions .secondary {
+  margin-top: 0; 
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 42px;
+  padding: 0 16px;
+}
+
+.save-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 42px; 
+  padding: 0 16px;
+  border-radius: 8px;
+  border: 1px solid var(--studio-highlight);
+  background-color: var(--studio-highlight); 
+  color: var(--ink); 
+  font-weight: 700;
+  transition: opacity 0.15s ease, transform 0.1s ease, background-color 0.2s ease;
+}
+
+.save-btn-text {
+  font-size: 0.9rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.save-icon-btn:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.save-icon-btn.is-saved {
+  background-color: var(--studio-highlight);
+  border-color: var(--studio-highlight);
+  color: var(--ink);
+  opacity: 0.5;
+}
+
+.save-icon-btn:disabled:not(.is-saved) {
+  cursor: wait;
+}
+
+.image-preview:not(.has-image) {
+  background-color: #faf8f5;
+  border: 1px dashed var(--line);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.image-preview:not(.has-image):hover {
+  border-color: #b8aba0;
+  background-color: #f5f1eb;
+}
+
+.upload-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #a3978c; 
+}
+
+.upload-placeholder-title {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--muted); 
+
+.upload-placeholder-sub {
+  font-size: 0.72rem;
+  color: #a3978c;
+}
+
+.file-name {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.nav-saved-btn {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 5px;
+}
+
+.nav-saved-btn svg {
+  transform: translateY(3px);
+}
