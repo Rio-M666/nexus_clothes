@@ -105,6 +105,39 @@ export function createTryOnMiddleware({ apiKey = '', fetchImpl = fetch } = {}) {
     return { person: files[0], garment: files[1], category }
   }
 
+  async function sendResultImage(res, task) {
+    if (!task?.imageUrl) throw new ApiError(404, '生成画像が見つからないか、有効期限が切れています。')
+    const response = await fetchImpl(task.imageUrl, {
+      signal: AbortSignal.timeout(30_000), redirect: 'error',
+    })
+    if ([401, 403, 404, 410].includes(response.status)) {
+      await response.body?.cancel()
+      throw new ApiError(410, '生成画像の有効期限が切れました。')
+    }
+    const type = response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase()
+    if (!response.ok || !response.body || !['image/jpeg', 'image/png', 'image/webp', 'application/octet-stream'].includes(type)) {
+      await response.body?.cancel()
+      throw new ApiError(502, '生成画像を取得できませんでした。')
+    }
+    const maxResultSize = 20_000_000
+    let size = 0
+    const chunks = []
+    for await (const chunk of response.body) {
+      size += chunk.length
+      if (size > maxResultSize) throw new ApiError(413, '生成画像が大きすぎるため保存できません。')
+      chunks.push(chunk)
+    }
+    const image = Buffer.concat(chunks)
+    const format = image.subarray(0, 3).equals(Buffer.from([255, 216, 255])) ? 'image/jpeg'
+      : image.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) ? 'image/png'
+      : image.toString('ascii', 0, 4) === 'RIFF' && image.toString('ascii', 8, 12) === 'WEBP' ? 'image/webp' : null
+    if (!format || (type !== format && type !== 'application/octet-stream')) {
+      throw new ApiError(502, '生成画像の形式を確認できませんでした。')
+    }
+    res.writeHead(200, { 'Content-Type': format, 'Content-Length': image.length, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' })
+    res.end(image)
+  }
+
   return async function tryOnMiddleware(req, res, next) {
     const path = (req.url || '').split('?')[0]
     if (!path.startsWith('/api/try-on')) return next()
@@ -136,6 +169,10 @@ export function createTryOnMiddleware({ apiKey = '', fetchImpl = fetch } = {}) {
           return reply(res, 202, { taskId: data.task_id })
         } finally { creating = false }
       }
+      const imageMatch = /^\/api\/try-on\/tasks\/([^/]+)\/image$/.exec(path)
+      if (imageMatch && req.method === 'GET') {
+        return await sendResultImage(res, tasks.get(decodeURIComponent(imageMatch[1])))
+      }
       const match = /^\/api\/try-on\/tasks\/([^/]+)$/.exec(path)
       if (match && req.method === 'GET') {
         const taskId = decodeURIComponent(match[1])
@@ -152,6 +189,7 @@ export function createTryOnMiddleware({ apiKey = '', fetchImpl = fetch } = {}) {
           let url
           try { url = new URL(data.results?.url) } catch { /* handled below */ }
           if (url?.protocol !== 'https:') throw new ApiError(502, '生成画像のURLを取得できませんでした。')
+          task.imageUrl = url.href
           return reply(res, 200, { status: 'success', imageUrl: url.href })
         }
         return reply(res, 200, { status: 'running' })

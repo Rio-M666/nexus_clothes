@@ -1,95 +1,46 @@
 import { useEffect, useRef, useState } from 'react'
-import TryOnComparison from './TryOnComparison'
+import ImagePicker from './ImagePicker'
+import TryOnResult from './TryOnResult'
+import { usePhotoUrl } from './usePhotoUrl'
+import { apiResponse, createTask, RequestError, taskStatus, waitForPoll } from './tryOnApi'
+import { categoryNames, type Category, type SavedLook, type WardrobeItem } from './savedLookStore'
 
-type Category = 'upper_body' | 'lower_body' | 'full_body'
+type Trial = { person: File; name?: string } & (
+  | { state: 'queued' | 'running' }
+  | { state: 'success'; id: string; url: string }
+  | { state: 'failed' | 'unknown'; message: string }
+  | { state: 'paused'; id: string; message: string }
+)
+type Comparison = { id: string; garment: File; category: Category; trials: Trial[] }
 
-class RequestError extends Error {
-  constructor(message: string, readonly status: number) { super(message) }
+function OwnedPhoto({ item }: { item: WardrobeItem }) {
+  const preview = usePhotoUrl(item.photo)
+  return <figure>
+    <div className="image-preview">{preview && <img src={preview} alt={item.name + 'の着用写真'} />}</div>
+    <figcaption>{item.name}</figcaption>
+  </figure>
 }
 
-async function apiResponse(response: Response) {
-  const data = await response.json().catch(() => null)
-  if (!response.ok) throw new RequestError(data?.error || '画像生成に接続できませんでした。時間を置いてお試しください。', response.status)
-  if (!data || typeof data !== 'object') throw new Error('画像生成サービスに接続できませんでした。')
-  return data
-}
-
-function usePhotoUrl(file: File | null) {
-  const [url, setUrl] = useState('')
-
-  useEffect(() => {
-    if (!file) {
-      setUrl('')
-      return
-    }
-    const next = URL.createObjectURL(file)
-    setUrl(next)
-    return () => URL.revokeObjectURL(next)
-  }, [file])
-
-  return url
-}
-
-function ImagePicker({ label, file, disabled, onChange }: {
-  label: string
-  file: File | null
-  disabled: boolean
-  onChange: (file: File | null) => void
+export default function PhotoTryOn({ savedIds, onSave, wardrobe, onOpenWardrobe }: {
+  wardrobe: WardrobeItem[]
+  onOpenWardrobe: () => void
+  savedIds: string[]
+  onSave: (look: SavedLook) => Promise<void>
 }) {
-  const preview = usePhotoUrl(file)
-  const [error, setError] = useState('')
-  const selection = useRef(0)
-
-  return <label className="image-picker">
-    <span>{label}</span>
-    <span className="image-preview">
-      {preview ? <img src={preview} alt={`${label}のプレビュー`} /> : <span>JPEGまたはPNG</span>}
-    </span>
-    <input type="file" accept="image/jpeg,image/png" disabled={disabled} onChange={async (event) => {
-      const input = event.currentTarget
-      const next = input.files?.[0]
-      const current = ++selection.current
-      setError('')
-      onChange(null)
-      if (!next) return
-      try {
-        if (!['image/jpeg', 'image/png'].includes(next.type) || !next.size || next.size >= 10_000_000) {
-          throw new Error('10MB未満のJPEGまたはPNGを選択してください。')
-        }
-        const image = await createImageBitmap(next)
-        const long = Math.max(image.width, image.height)
-        const short = Math.min(image.width, image.height)
-        image.close()
-        if (long > 4096 || long < 512 || short < 384) {
-          throw new Error('512×384px以上、長辺4096px以下の写真を選択してください。')
-        }
-        if (current === selection.current) onChange(next)
-      } catch (cause) {
-        if (current !== selection.current) return
-        input.value = ''
-        setError(cause instanceof Error && !(cause instanceof DOMException) ? cause.message : '写真を読み込めませんでした。別の写真をお試しください。')
-      }
-    }} />
-    {file && <span className="photo-hint">ファイルを選び直すと写真を差し替えられます。</span>}
-    {error && <span className="form-error" role="alert">{error}</span>}
-  </label>
-}
-
-export default function PhotoTryOn() {
   const [configured, setConfigured] = useState<boolean | null>(null)
   const [configError, setConfigError] = useState(false)
-  const [person, setPerson] = useState<File | null>(null)
+  const [manualPhoto, setManualPhoto] = useState<File | null>(null)
+  const [selection, setSelection] = useState<string[]>([])
+  const selected = selection.flatMap((id) => wardrobe.filter((item) => item.id === id))
+  const first = selected[0]
   const [garment, setGarment] = useState<File | null>(null)
   const [category, setCategory] = useState<Category>('upper_body')
   const [consent, setConsent] = useState(false)
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState('')
-  const [error, setError] = useState('')
-  const [result, setResult] = useState<{ url: string; original: File } | null>(null)
-  const originalUrl = usePhotoUrl(result?.original ?? null)
-  const [pendingTask, setPendingTask] = useState<string | null>(null)
-  const controller = useRef<AbortController | null>(null)
+  const [comparison, setComparison] = useState<Comparison | null>(null)
   const resultHeading = useRef<HTMLHeadingElement>(null)
+  const controller = useRef<AbortController | null>(null)
 
   useEffect(() => {
     const abort = new AbortController()
@@ -100,108 +51,170 @@ export default function PhotoTryOn() {
     return () => { abort.abort(); controller.current?.abort() }
   }, [])
 
-  useEffect(() => { if (result) resultHeading.current?.focus() }, [result])
+  useEffect(() => {
+    setConsent(false)
+    setSelection((ids) => ids.filter((id) => wardrobe.some((item) => item.id === id)))
+  }, [wardrobe])
 
-  async function generate() {
-    if (!person || (!pendingTask && (!garment || !consent)) || !configured || controller.current) return
+  const comparisonId = comparison?.id
+  useEffect(() => {
+    if (comparisonId) resultHeading.current?.focus()
+  }, [comparisonId])
+
+  function toggle(item: WardrobeItem) {
+    if (selection.includes(item.id)) setSelection(selection.filter((id) => id !== item.id))
+    else if (selected.length < 3) setSelection([...selection, item.id])
+    setConsent(false)
+  }
+
+  async function run(batch: Comparison, indices: number[]) {
+    if (controller.current || !configured) return
     const abort = new AbortController()
     controller.current = abort
-    const timeout = window.setTimeout(() => abort.abort(), 5 * 60_000)
     setBusy(true)
-    setError('')
-    setResult(null)
-    setProgress(pendingTask ? '結果を確認しています…' : '写真を送信しています…')
-    let taskId = pendingTask
+    setComparison(batch)
+
+    function update(index: number, trial: Trial) {
+      setComparison((current) => current?.id === batch.id
+        ? { ...current, trials: current.trials.map((item, i) => i === index ? trial : item) }
+        : current)
+    }
+
     try {
-      if (!taskId) {
-        const form = new FormData()
-        form.set('person', person)
-        form.set('garment', garment!)
-        form.set('category', category)
-        const task = await fetch('/api/try-on', { method: 'POST', body: form, signal: abort.signal }).then(apiResponse)
-        if (typeof task.taskId !== 'string' || !task.taskId) throw new Error('生成を開始できませんでした。')
-        taskId = task.taskId as string
-        setPendingTask(taskId)
-      }
-      setProgress('試着画像を生成しています。このままお待ちください…')
-      while (!abort.signal.aborted) {
-        await new Promise<void>((resolve, reject) => {
-          const onAbort = () => { window.clearTimeout(timer); reject(new Error('timeout')) }
-          const timer = window.setTimeout(() => {
-            abort.signal.removeEventListener('abort', onAbort)
-            resolve()
-          }, 10_000)
-          abort.signal.addEventListener('abort', onAbort, { once: true })
-          if (abort.signal.aborted) onAbort()
-        })
-        const status = await fetch(`/api/try-on/tasks/${encodeURIComponent(taskId)}`, { signal: abort.signal }).then(apiResponse)
-        if (status.status === 'error') {
-          setPendingTask(null)
-          throw new Error(status.error || '画像を生成できませんでした。')
-        }
-        if (status.status === 'success') {
-          const imageUrl = new URL(status.imageUrl)
-          if (imageUrl.protocol !== 'https:') throw new Error('画像を取得できませんでした。')
-          setResult({ url: imageUrl.href, original: person })
-          setPendingTask(null)
+      for (const index of indices) {
+        const original = batch.trials[index]
+        const source = { person: original.person, name: original.name }
+        let id = original.state === 'paused' ? original.id : undefined
+        const timeout = AbortSignal.any([abort.signal, AbortSignal.timeout(5 * 60_000)])
+        update(index, { ...source, state: 'running' })
+        try {
+          if (!id) {
+            setProgress('写真を送信しています…')
+            id = await createTask(source.person, batch.garment, batch.category, timeout)
+            setProgress('試着画像を生成しています…')
+            await waitForPoll(timeout)
+          }
+          for (;;) {
+            setProgress('結果を確認しています…')
+            const status = await taskStatus(id, timeout)
+            if (status.state !== 'running') {
+              update(index, status.state === 'success' ? { ...source, ...status, id } : { ...source, ...status })
+              break
+            }
+            setProgress('試着画像を生成しています…')
+            await waitForPoll(timeout)
+          }
+        } catch (cause) {
+          if (abort.signal.aborted) return
+          const message = cause instanceof Error ? cause.message : '画像を生成できませんでした。'
+          if (id) {
+            if (cause instanceof RequestError && cause.status === 404) {
+              update(index, { ...source, state: 'failed', message })
+              continue
+            }
+            update(index, { ...source, state: 'paused', id, message: '結果を確認できませんでした。「結果を再確認」で同じ生成を確認できます。' })
+            return
+          }
+          if (cause instanceof RequestError && [400, 413, 429, 503].includes(cause.status)) {
+            update(index, { ...source, state: 'failed', message })
+            if (cause.status === 400 || cause.status === 413) continue
+            return
+          }
+          update(index, {
+            ...source, state: 'unknown',
+            message: cause instanceof RequestError && cause.status === 409 ? message
+              : '生成の受付を確認できませんでした。利用履歴を確認してから新しく試着してください。',
+          })
           return
         }
       }
-    } catch (cause) {
-      if (cause instanceof RequestError && cause.status === 404) setPendingTask(null)
-      setError(abort.signal.aborted
-        ? taskId
-          ? '確認に時間がかかっています。生成は続いている場合があります。「結果を再確認」で同じ画像の結果を確認できます。'
-          : '送信結果を確認できませんでした。生成が始まっている可能性があるため、すぐに再実行せず時間を置いてください。'
-        : cause instanceof Error ? cause.message : '画像を生成できませんでした。')
     } finally {
-      window.clearTimeout(timeout)
       controller.current = null
       setBusy(false)
       setProgress('')
     }
   }
 
+  function start() {
+    if (!garment || !consent || (!first && !manualPhoto)) return
+    const trials: Trial[] = first
+      ? selected.map(({ photo, name }) => ({ person: photo, name, state: 'queued' }))
+      : manualPhoto ? [{ person: manualPhoto, state: 'queued' }] : []
+    void run({ id: crypto.randomUUID(), garment, category, trials }, trials.map((_, index) => index))
+  }
+
+  const trials = comparison?.trials ?? []
+  const multiple = trials.length > 1
+  const interrupted = trials.findIndex((trial) => trial.state === 'paused')
+  const unknown = trials.some((trial) => trial.state === 'unknown')
+  const queued = trials.flatMap((trial, index) => trial.state === 'queued' ? [index] : [])
+  const successful = trials.filter((trial) => trial.state === 'success')
+  const savedCount = successful.filter(({ id }) => savedIds.includes(id)).length
+  const pickCount = first ? selected.length : manualPhoto ? 1 : 0
+
   return <section>
-    <div className="intro">
-      <p>正面を向いて1人で立った写真と、試したい服の写真を選びます。</p>
-    </div>
+    <div className="intro"><p>手持ちの洋服を選ぶか、着用写真を直接選びます。</p></div>
     {configured === false && <p className="api-notice" role="status">YouCamのAPIキーが未設定です。プロジェクトの <code>.env.local</code> に <code>YOUCAM_API_KEY</code> を設定し、<code>npm run dev</code> を再起動してください。</p>}
     {configError && <p className="api-notice" role="alert">画像生成サービスに接続できません。Macで <code>npm run dev</code> を起動し、ターミナルに表示されたURLを開いてください。</p>}
-    <form className="tryon-form" onSubmit={(event) => { event.preventDefault(); void generate() }}>
-      <fieldset disabled={busy || Boolean(pendingTask)}>
+    <form className="tryon-form" onSubmit={(event) => { event.preventDefault(); start() }}>
+      <fieldset disabled={busy || interrupted >= 0}>
         <legend>写真を選ぶ</legend>
         <p className="hint">JPEG・PNG／各10MB未満／512×384px以上・長辺4096px以下</p>
-        <div className="upload-grid">
-          <ImagePicker label="あなたの写真" file={person} disabled={busy} onChange={(file) => { setPerson(file); setConsent(false) }} />
-          <ImagePicker label="試したい服" file={garment} disabled={busy} onChange={(file) => { setGarment(file); setConsent(false) }} />
+        <div className="person-source">
+          {wardrobe.length > 0 ? <fieldset className="wardrobe-options">
+            <legend>手持ちの洋服</legend>
+            <p className="hint">登録写真を最大3枚選べます。選ばない場合は写真を直接指定します。</p>
+            <div className="wardrobe-choice-grid">
+              {wardrobe.map((item) => {
+                const checked = selection.includes(item.id)
+                return <label key={item.id}>
+                  <input type="checkbox" checked={checked} disabled={!checked && selected.length >= 3} onChange={() => toggle(item)} />
+                  {item.name}
+                </label>
+              })}
+            </div>
+          </fieldset> : <button type="button" className="secondary bottom-shortcut" onClick={onOpenWardrobe}>手持ちの洋服を登録</button>}
         </div>
-        <label className="category-picker">服の種類
-          <select value={category} onChange={(event) => setCategory(event.currentTarget.value as Category)}>
-            <option value="upper_body">トップス</option>
-            <option value="lower_body">ボトムス</option>
-            <option value="full_body">全身のコーデ</option>
+        <label className="category-picker">着せ替える部位
+          <select value={category} onChange={(event) => {
+            setCategory(event.currentTarget.value as Category)
+            setGarment(null)
+            setConsent(false)
+          }}>
+            {Object.entries(categoryNames).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
         </label>
-        <p className="photo-hint">顔と試着する部位がはっきり写った写真を使ってください。ボトムス・全身のコーデの参考には、服を着た人物の写真を選んでください。トップスは商品単体の写真も使えます。</p>
+        <div className="upload-grid">
+          {first ? <div><strong>元の着用写真</strong><div className="selected-photos">{selected.map((item) => <OwnedPhoto key={item.id} item={item} />)}</div></div>
+            : <ImagePicker label="あなたの写真" file={manualPhoto} disabled={busy} onChange={(file) => { setManualPhoto(file); setConsent(false) }} />}
+          <ImagePicker key={category} label={'試したい' + categoryNames[category]} file={garment} disabled={busy} onChange={(file) => { setGarment(file); setConsent(false) }} />
+        </div>
+        <p className="photo-hint">顔と試着する部位がはっきり写った写真を使ってください。試したい服がボトムスや全身のコーデの場合は、その服を着た人物の写真を選んでください。トップスは商品単体の写真も使えます。</p>
         <label className="photo-consent">
           <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.currentTarget.checked)} />
-          <span>選んだ2枚の写真をPerfect Corp.へ送信して生成することに同意します。生成には利用枠を消費します。</span>
+          <span>着用写真と試したい服の画像をPerfect Corp.へ送信することに同意します。選んだ服1着につき1回生成し、利用枠を消費します。</span>
         </label>
       </fieldset>
-      <button className="primary" disabled={busy || !configured || (!pendingTask && (!person || !garment || !consent))} type="submit">{busy ? '生成中…' : pendingTask ? '結果を再確認' : 'この服を試着する'}</button>
-      {progress && <p className="generation-status" role="status" aria-live="polite">{progress}</p>}
-      {error && <p className="form-error" role="alert">{error}</p>}
+      <button className="primary" disabled={busy || interrupted >= 0 || !configured || !pickCount || !garment || !consent} type="submit">
+        {busy ? '生成中…' : pickCount > 1 ? pickCount + '着を試着する' : 'この服を試着する'}
+      </button>
     </form>
-    {result && <section className="generated-result">
-      <h2 ref={resultHeading} tabIndex={-1}>試着画像ができました</h2>
-      <TryOnComparison
-        originalUrl={originalUrl}
-        resultUrl={result.url}
-        onResultError={() => setError('生成画像を表示できません。画像の有効期限が切れている可能性があります。')}
-      />
-      <a className="secondary" href={result.url} target="_blank" rel="noopener noreferrer">画像を開いて保存 ↗</a>
-      <p className="photo-hint">画像のURLには有効期限があります。気に入った画像は保存してください。着用感やサイズの正確さを保証するものではありません。</p>
+    {comparison && <section className="generated-result">
+      <h2 ref={resultHeading} tabIndex={-1}>{multiple ? '試着結果を比較' : successful.length ? '試着画像ができました' : '試着結果'}</h2>
+      {multiple && <p role="status">比較できたコーデ {successful.length}件 ／ 保存したコーデ {savedCount}件</p>}
+      <div className={multiple ? 'trial-grid' : undefined}>
+        {trials.map((trial, index) => <article key={comparison.id + ':' + index} className="trial-card">
+          {trial.name && <h3>{trial.name}</h3>}
+          {trial.state === 'queued' && <p className="hint">{unknown ? '生成を開始していません' : '生成待ち'}</p>}
+          {trial.state === 'running' && <p role="status" className="generation-status">{progress || '生成を準備しています…'}</p>}
+          {trial.state === 'success' && <TryOnResult key={trial.id} id={trial.id} url={trial.url} original={trial.person} name={trial.name} category={comparison.category} compareOriginal={!multiple} saved={savedIds.includes(trial.id)} onSave={onSave} />}
+          {'message' in trial && <p role="alert" className="form-error">{trial.message}</p>}
+          {trial.state === 'paused' && <button type="button" className="secondary" disabled={busy} onClick={() => void run(comparison, [index, ...queued])}>結果を再確認</button>}
+          {trial.state === 'failed' && <button type="button" className="secondary" disabled={busy || interrupted >= 0 || unknown} onClick={() => void run(comparison, [index])}>この組み合わせを再試行</button>}
+        </article>)}
+      </div>
+      {!busy && interrupted < 0 && !unknown && queued.length > 0 && <button type="button" className="secondary" onClick={() => void run(comparison, queued)}>残り{queued.length}着を生成</button>}
+      {successful.length > 0 && <p className="photo-hint">画像のURLには有効期限があります。気に入った画像は保存してください。着用感やサイズの正確さを保証するものではありません。</p>}
     </section>}
   </section>
 }
