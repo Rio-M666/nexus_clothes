@@ -205,8 +205,14 @@ export default function PhotoTryOn({ savedIds, onSave, wardrobe, onOpenWardrobe 
       <div className={multiple ? 'trial-grid' : undefined}>
         {trials.map((trial, index) => <article key={comparison.id + ':' + index} className="trial-card">
           {trial.name && <h3>{trial.name}</h3>}
-          {trial.state === 'queued' && <p className="hint">{unknown ? '生成を開始していません' : '生成待ち'}</p>}
-          {trial.state === 'running' && <p role="status" className="generation-status">{progress || '生成を準備しています…'}</p>}
+          {trial.state === 'queued' && <p className="generation-status trial-wait">
+            <span className="trial-wait-dot" aria-hidden="true" />
+            {unknown ? '生成を開始していません' : interrupted >= 0 ? '待機中' : '順番待ち'}
+          </p>}
+          {trial.state === 'running' && <p role="status" className="generation-status trial-wait">
+            <span className="trial-spinner" aria-hidden="true" />
+            {progress || '生成を準備しています…'}
+          </p>}
           {trial.state === 'success' && <TryOnResult key={trial.id} id={trial.id} url={trial.url} original={trial.person} name={trial.name} category={comparison.category} compareOriginal={!multiple} saved={savedIds.includes(trial.id)} onSave={onSave} />}
           {'message' in trial && <p role="alert" className="form-error">{trial.message}</p>}
           {trial.state === 'paused' && <button type="button" className="secondary" disabled={busy} onClick={() => void run(comparison, [index, ...queued])}>結果を再確認</button>}

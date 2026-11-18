@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import PhotoZoom from './PhotoZoom'
+import ResultPhotoSwitch from './ResultPhotoSwitch'
 import TryOnComparison from './TryOnComparison'
 import { apiResponse, RequestError } from './tryOnApi'
 import { usePhotoUrl } from './usePhotoUrl'
@@ -15,7 +15,7 @@ export default function TryOnResult({ id, url, original, name, category, compare
   saved: boolean
   onSave: (look: SavedLook) => Promise<void>
 }) {
-  const originalUrl = usePhotoUrl(compareOriginal ? original : null)
+  const originalUrl = usePhotoUrl(original)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [displayError, setDisplayError] = useState(false)
@@ -41,7 +41,7 @@ export default function TryOnResult({ id, url, original, name, category, compare
   return <>
     {compareOriginal
       ? <TryOnComparison originalUrl={originalUrl} resultUrl={url} onResultError={() => setDisplayError(true)} />
-      : <PhotoZoom src={url} label={name + 'の試着イメージ'} onError={() => setDisplayError(true)} />}
+      : <ResultPhotoSwitch name={name ?? '着用写真'} originalUrl={originalUrl} resultUrl={url} onResultError={() => setDisplayError(true)} />}
     <div className="result-actions">
       <button
         type="button"

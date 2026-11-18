@@ -104,7 +104,7 @@ function App() {
             <button type="button" aria-pressed={mode === 'photo'} aria-controls="photo-panel" onClick={() => setMode('photo')}>マイ写真で試す</button>
           </div>
         </div>
-        <div id="sample-panel" hidden={mode !== 'sample'}><SampleTryOn outfit={outfit} /></div>
+        <div id="sample-panel" hidden={mode !== 'sample'}><SampleTryOn key={outfit.id} outfit={outfit} /></div>
         <div id="photo-panel" hidden={mode !== 'photo'}>
           {import.meta.env.DEV ? <PhotoTryOn wardrobe={wardrobe ?? []} onOpenWardrobe={() => navigate('wardrobe')} savedIds={looks?.map(({ id }) => id) ?? []} onSave={save} /> : <TryOnSetupGuide />}
         </div>
