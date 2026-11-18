@@ -20,7 +20,7 @@ export default function SampleTryOn({ outfit }: { outfit: SampleOutfit }) {
         <h2 id="sample-heading">サンプル写真</h2>
         <div className="upload-grid">
           <figure className="sample-photo">
-            <figcaption>元の着用写真</figcaption>
+            <figcaption>サンプルの全身写真</figcaption>
             <div className="image-preview"><img src={outfit.originalUrl} alt={outfit.name + 'の着用写真'} /></div>
           </figure>
           <figure className="sample-photo">

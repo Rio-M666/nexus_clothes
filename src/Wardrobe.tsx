@@ -88,7 +88,7 @@ export default function Wardrobe({ wardrobe, loadError, onRegister, onUpdate, on
         }
       }}>
         <fieldset disabled={submitting || wardrobe === null}>
-          <legend>{editingId ? '洋服を編集' : '洋服を登録'}</legend>
+          <legend>{editingId ? '洋服を編集' : '洋服の着用写真を登録'}</legend>
           <p><strong>顔がはっきり写った着用写真が必要です。</strong> 登録する服を着て、1人で正面を向いて立ち、顔から足元までが写る写真を選んでください。この写真を試着の元画像に使います。</p>
           <p className="hint">JPEG・PNG／10MB未満／512×384px以上・長辺4096px以下</p>
           <label className="bottom-choice">洋服の名前

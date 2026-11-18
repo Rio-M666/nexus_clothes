@@ -43,10 +43,36 @@ export default function TryOnResult({ id, url, original, name, category, compare
       ? <TryOnComparison originalUrl={originalUrl} resultUrl={url} onResultError={() => setDisplayError(true)} />
       : <PhotoZoom src={url} label={name + 'の試着イメージ'} onError={() => setDisplayError(true)} />}
     <div className="result-actions">
-      <button type="button" className="primary" disabled={saving || saved} onClick={() => void save()}>{saved ? '保存済み' : saving ? '保存中…' : '保存する'}</button>
+      <button
+        type="button"
+        className={`save-icon-btn ${saved ? 'is-saved' : ''}`}
+        disabled={saving || saved}
+        onClick={() => void save()}
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          width="18"
+          height="18"
+          fill={saved ? 'currentColor' : 'none'}
+          stroke="currentColor"
+          strokeWidth={2.2}
+          aria-hidden="true"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M6 4.5A2.5 2.5 0 0 1 8.5 2h7A2.5 2.5 0 0 1 18 4.5v16.38a.75.75 0 0 1-1.22.58L12 17.6l-4.78 3.86A.75.75 0 0 1 6 20.88V4.5Z"
+          />
+        </svg>
+        <span className="save-btn-text">
+          {saved ? '保存済み' : saving ? '保存中…' : '保存'}
+        </span>
+      </button>
       <a className="secondary" href={url} target="_blank" rel="noopener noreferrer">画像を開く ↗</a>
     </div>
     {displayError && <p className="form-error" role="alert">生成画像を表示できません。画像の有効期限が切れている可能性があります。</p>}
     {error && <p className="form-error" role="alert">{error}</p>}
   </>
 }
+

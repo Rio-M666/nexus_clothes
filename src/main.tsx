@@ -64,7 +64,32 @@ function App() {
           <button type="button" aria-current={view === 'try-on' ? 'page' : undefined} onClick={() => navigate('try-on')}>試着する</button>
           {import.meta.env.DEV && <>
           <button type="button" aria-current={view === 'wardrobe' ? 'page' : undefined} onClick={() => navigate('wardrobe')}>手持ちの洋服</button>
-          <button type="button" aria-current={view === 'saved' ? 'page' : undefined} onClick={() => navigate('saved')}>保存済み</button>
+          <button
+            type="button"
+            className="nav-saved-btn"
+            aria-current={view === 'saved' ? 'page' : undefined}
+            onClick={() => navigate('saved')}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              fill={view === 'saved' ? 'currentColor' : 'none'}
+              stroke="currentColor"
+              strokeWidth={2.2}
+              aria-hidden="true"
+              style={{ transform: 'translateY(2px)', flexShrink: 0 }}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M6 4.5A2.5 2.5 0 0 1 8.5 2h7A2.5 2.5 0 0 1 18 4.5v16.38a.75.75 0 0 1-1.22.58L12 17.6l-4.78 3.86A.75.75 0 0 1 6 20.88V4.5Z"
+              />
+            </svg>
+            <span>保存済み</span>
+          </button>
           </>}
         </nav>
       </div>
@@ -76,7 +101,7 @@ function App() {
           <h1 className="page-title">写真で試着</h1>
           <div className="mode-switch" role="group" aria-label="試着方法">
             <button type="button" aria-pressed={mode === 'sample'} aria-controls="sample-panel" onClick={() => setMode('sample')}>サンプル</button>
-            <button type="button" aria-pressed={mode === 'photo'} aria-controls="photo-panel" onClick={() => setMode('photo')}>自分の写真</button>
+            <button type="button" aria-pressed={mode === 'photo'} aria-controls="photo-panel" onClick={() => setMode('photo')}>マイ写真で試す</button>
           </div>
         </div>
         <div id="sample-panel" hidden={mode !== 'sample'}><SampleTryOn outfit={outfit} /></div>

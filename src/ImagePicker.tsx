@@ -13,8 +13,27 @@ export default function ImagePicker({ label, file, disabled, onChange }: {
 
   return <label className="image-picker">
     <span>{label}</span>
-    <span className="image-preview">
-      {preview ? <img src={preview} alt={`${label}のプレビュー`} /> : <span>JPEGまたはPNG</span>}
+    <span className={`image-preview ${preview ? 'has-image' : ''}`}>
+      {preview ? (
+        <img src={preview} alt={`${label}のプレビュー`} />
+      ) : (
+        <span className="upload-placeholder">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            width="28"
+            height="28"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.8}
+            aria-hidden="true"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          <span className="upload-placeholder-title">写真を選択</span>
+          <span className="upload-placeholder-sub">JPEGまたはPNG</span>
+        </span>
+      )}
     </span>
     <span className="file-action">{file ? '差し替える' : '写真を選ぶ'}</span>
     {file && <span className="file-name">{file.name}</span>}

@@ -186,8 +186,8 @@ export default function PhotoTryOn({ savedIds, onSave, wardrobe, onOpenWardrobe 
         </label>
         <div className="upload-grid">
           {first ? <div><strong>元の着用写真</strong><div className="selected-photos">{selected.map((item) => <OwnedPhoto key={item.id} item={item} />)}</div></div>
-            : <ImagePicker label="あなたの写真" file={manualPhoto} disabled={busy} onChange={(file) => { setManualPhoto(file); setConsent(false) }} />}
-          <ImagePicker key={category} label={'試したい' + categoryNames[category]} file={garment} disabled={busy} onChange={(file) => { setGarment(file); setConsent(false) }} />
+            : <ImagePicker label="あなたの全身写真" file={manualPhoto} disabled={busy} onChange={(file) => { setManualPhoto(file); setConsent(false) }} />}
+          <ImagePicker key={category} label={'試着したい' + categoryNames[category]} file={garment} disabled={busy} onChange={(file) => { setGarment(file); setConsent(false) }} />
         </div>
         <p className="photo-hint">顔と試着する部位がはっきり写った写真を使ってください。試したい服がボトムスや全身のコーデの場合は、その服を着た人物の写真を選んでください。トップスは商品単体の写真も使えます。</p>
         <label className="photo-consent">
@@ -201,7 +201,7 @@ export default function PhotoTryOn({ savedIds, onSave, wardrobe, onOpenWardrobe 
     </form>
     {comparison && <section className="generated-result">
       <h2 ref={resultHeading} tabIndex={-1}>{multiple ? '試着結果を比較' : successful.length ? '試着画像ができました' : '試着結果'}</h2>
-      {multiple && <p role="status">比較できたコーデ {successful.length}件 ／ 保存したコーデ {savedCount}件</p>}
+      {multiple && <p role="status">比較したコーデ {successful.length}件 ／ 保存したコーデ {savedCount}件</p>}
       <div className={multiple ? 'trial-grid' : undefined}>
         {trials.map((trial, index) => <article key={comparison.id + ':' + index} className="trial-card">
           {trial.name && <h3>{trial.name}</h3>}
