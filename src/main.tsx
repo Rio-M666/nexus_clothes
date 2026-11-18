@@ -59,7 +59,7 @@ function App() {
   return <>
     <header className="header">
       <div className="header-inner">
-        <button type="button" className="wordmark" aria-label="通販服試着 ホーム" onClick={() => navigate('home')}>通販服試着<span aria-hidden="true">.</span></button>
+        <button type="button" className="wordmark" aria-label="ためし着 ホーム" onClick={() => navigate('home')}>ためし着<span aria-hidden="true">.</span></button>
         <nav aria-label="メイン">
           <button type="button" aria-current={view === 'try-on' ? 'page' : undefined} onClick={() => navigate('try-on')}>試着する</button>
           {import.meta.env.DEV && <>
