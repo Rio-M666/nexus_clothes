@@ -528,3 +528,10 @@ main:focus { outline: none; }
   .trial-spinner { animation: trial-spin .8s linear infinite; }
 }
 @keyframes trial-spin { to { transform: rotate(360deg); } }
+
+.image-picker .image-preview.is-dragging {
+  outline: 2px dashed var(--accent);
+  outline-offset: -4px;
+  background: var(--selected);
+}
+.upload-placeholder-title { text-align: center; padding-inline: 8px; }
