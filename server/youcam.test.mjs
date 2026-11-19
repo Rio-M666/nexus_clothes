@@ -148,3 +148,32 @@ test('provider authentication errors are sanitized and a failed request can be r
     assert.equal(body.includes(key), false)
   }
 })
+
+test('serves image bytes only for a successful task and handles expired and invalid images', async (t) => {
+  const mock = provider()
+  let result = () => new Response(png, { headers: { 'Content-Type': 'image/png' } })
+  const base = await localApi(t, {
+    apiKey: key,
+    async fetchImpl(url, options) {
+      if (url !== 'https://storage.example/result.png') return mock.fetchImpl(url, options)
+      assert.equal(new Headers(options.headers).has('Authorization'), false)
+      assert.equal(options.redirect, 'error')
+      return result()
+    },
+  })
+  const task = base + '/api/try-on/tasks/task-1'
+  assert.equal((await fetch(task + '/image')).status, 404)
+  assert.equal((await fetch(base + '/api/try-on', { method: 'POST', body: photos() })).status, 202)
+  assert.equal((await fetch(task + '/image')).status, 404)
+  await fetch(task).then((response) => response.json())
+
+  const image = await fetch(task + '/image')
+  assert.equal(image.status, 200)
+  assert.equal(image.headers.get('content-type'), 'image/png')
+  assert.deepEqual(new Uint8Array(await image.arrayBuffer()), png)
+
+  result = () => new Response(null, { status: 403 })
+  assert.equal((await fetch(task + '/image')).status, 410)
+  result = () => new Response('invalid bytes', { headers: { 'Content-Type': 'image/png' } })
+  assert.equal((await fetch(task + '/image')).status, 502)
+})
