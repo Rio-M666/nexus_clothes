@@ -2,7 +2,7 @@ name: Deploy demo to GitHub Pages
 
 on:
   push:
-    branches: [dev]
+    branches: [main]
 
 permissions:
   contents: read
